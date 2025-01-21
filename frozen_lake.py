@@ -61,6 +61,12 @@ class FrozenLake:
         self.steps += 1
         action = self.epsilon_greedy_policy(state, epsilon)
         next_state, reward, done, truncated, info = env.step(action)
+        if done:  # could be done because agent went to the target or fll to the hole
+            if reward == 0:  # done because falling to the hole
+                reward = -1
+        else:
+            reward = -0.01  # minor punishment for not going to target
+        print("Reward: ", reward, " steps: ", self.steps)
         self.replay_buffer.append((state, action, reward, next_state, done))
         self.reward_array.append(reward)
         self.epsilon_array.append(self.epsilon)
