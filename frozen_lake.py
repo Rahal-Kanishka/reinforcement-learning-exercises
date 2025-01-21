@@ -32,9 +32,10 @@ class FrozenLake:
         self.batch_size = 100
         self.steps = 0
         self.state_array = [0] * 16
+        self.state_array = [0] * 16
         self.reward_array = []
         self.epsilon_array = []
-        self.prediction_array = []
+        self.prediction_array = [-1] * 16
         self.loss_array = []
 
     def epsilon_greedy_policy(self, state, epsilon=0.0):
@@ -44,7 +45,7 @@ class FrozenLake:
         else:
             q_values = self.model.predict(np.array([state], dtype=np.float32), verbose=0)[0]
             print("Playing by model: ", q_values, ', state: ', state, ', epsilon: ', epsilon)
-            self.prediction_array.append({np.argmax(q_values),np.argmax(q_values)})
+            # self.prediction_array.append({np.argmax(q_values),np.argmax(q_values)})
             return np.argmax(q_values)  # find max index (action value)
 
     def sample_experience(self, batch_size):
@@ -58,7 +59,6 @@ class FrozenLake:
     def play_one_step(self, env, state, epsilon):
         self.state_array[state] += 1
         self.steps += 1
-        print("Playing one step: ", self.state_array, " steps: ", self.steps)
         action = self.epsilon_greedy_policy(state, epsilon)
         next_state, reward, done, truncated, info = env.step(action)
         self.replay_buffer.append((state, action, reward, next_state, done))
@@ -71,7 +71,7 @@ class FrozenLake:
             plt.plot(range(self.steps), np.array(self.epsilon_array))
             plt.title('Rewards Graph')
             # Display the plot
-            plt.show()
+            plt.show(block=False)
         return next_state, reward, done, truncated, info
 
     def training_step(self, batch_size):
@@ -80,6 +80,7 @@ class FrozenLake:
         states, actions, rewards, next_states, dones = experiences
         next_q_values = self.model.predict(next_states, verbose=0)
         print("selecting max Q from: ", next_q_values)
+        self.print_state_values(next_states, next_q_values, batch_size)
         max_next_q_value = next_q_values.max(axis=1)
         print("max Q: ", max_next_q_value)
         runs = 1.0 - dones
@@ -91,23 +92,28 @@ class FrozenLake:
             q_values = tf.reduce_sum(all_q_values * mask, axis=1, keepdims=True)
             loss = tf.reduce_mean(self.loss_function(target_q_values, q_values))
             self.loss_array.append(loss)
-            plt.figure("Annotated Max Q-Values")
+            plt.figure("Loss graph")
             plt.plot(range(len(self.loss_array)), np.array(self.loss_array))
             plt.grid(False)
-            plt.show()
+            plt.show(block=False)
         grads = tape.gradient(loss, self.model.trainable_variables)
         self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
 
-        def get_action(self, state):
-            if state == 0:
-                return 'Left'
-            elif state == 1:
-                return 'down'
-            elif state == 2:
-                return 'right'
-            else:
-                return 'up'
+    def get_action(self, state):
+        if state == 0:
+            return 'Left'
+        elif state == 1:
+            return 'Down'
+        elif state == 2:
+            return 'Right'
+        else:
+            return 'Up'
 
-        def print_state_values(self):
-            for state in range(16):
+    def print_state_values(self, lake_states, predicted_values, batch_size):
+        results = [-1] * batch_size
+        print('lake_states: ', lake_states)
+        for state, index in enumerate(lake_states):
+            results[state] = np.argmax(predicted_values[index])
 
+        for state in results:
+            print('state: ', state, ', ', self.get_action(state))

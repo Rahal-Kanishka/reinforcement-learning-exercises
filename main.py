@@ -5,20 +5,20 @@ import tensorflow as tf
 if __name__ == '__main__':
     # execute only if run as the entry point into the program
     frozeLake = FrozenLake()
-    env = gym.make('FrozenLake-v1', render_mode= "human")
+    env = gym.make('FrozenLake-v1', is_slippery=False, render_mode= "human")
 
     for episode in range(600):
         print('Episode: ', episode, ', epsilon: ', frozeLake.epsilon)
         obs = env.reset()[0]
         for step in range(200):
-            epsilon = max(1 - episode / 50, 0.01)
+            epsilon = max(1 - episode / 200, 0.01)
             obs, reward, done, truncated, info = frozeLake.play_one_step(env, obs, epsilon)
             # print('step: ', step, ', Epsilon: ', epsilon, ', Reward: ', reward, ', obs: ', obs)
             env.render()
             if done or truncated:
                 break
 
-        if episode > 25:
+        if episode > 50:
             frozeLake.training_step(batch_size=32)
 
 
