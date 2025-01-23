@@ -5,6 +5,7 @@ import google.protobuf
 import tensorflow as tf
 import sys
 import matplotlib.pyplot as plt
+import random
 
 from collections import deque
 
@@ -56,6 +57,28 @@ class FrozenLake:
             np.array([batch_item[field_index] for batch_item in batch]) for field_index in range(5)
         ]  # [ state, actions, rewards, next_states, truncates, dones]
 
+    def prioritize_sample_experience(self, batch_size):
+        batch = []
+        indices = []
+        for i in range(16):
+            filtered_data = list(filter(lambda item: item[3] == i, self.replay_buffer))
+            if len(filtered_data) > 2:
+                # batch.append(random.sample(filtered_data, 2))
+                tmp = np.random.randint(len(filtered_data), size=2)  # get two items random from the results
+                indices.extend([self.replay_buffer.index(filtered_data[tmp[1]]), self.replay_buffer.index(filtered_data[tmp[1]])])  # get the index
+            elif len(filtered_data) == 2:
+                indices.append(self.replay_buffer.index(filtered_data[0]))
+                indices.append(self.replay_buffer.index(filtered_data[1]))
+            elif len(filtered_data) == 1:
+                indices.append(self.replay_buffer.index(filtered_data[0]))
+
+        print('Indices: ', indices)
+        batch = [self.replay_buffer[index] for index in indices]
+
+        return [
+            np.array([batch_item[field_index] for batch_item in batch]) for field_index in range(5)
+        ]
+
     def play_one_step(self, env, state, epsilon):
         self.state_array[state] += 1
         self.steps += 1
@@ -64,6 +87,9 @@ class FrozenLake:
         if done:  # could be done because agent went to the target or fll to the hole
             if reward == 0:  # done because falling to the hole
                 reward = -1
+            if reward == 1:  # done because of completion
+                reward = 10
+
         else:
             reward = -0.01  # minor punishment for not going to target
         print("Reward: ", reward, " steps: ", self.steps)
@@ -81,7 +107,7 @@ class FrozenLake:
         return next_state, reward, done, truncated, info
 
     def training_step(self, batch_size):
-        experiences = self.sample_experience(batch_size)
+        experiences = self.prioritize_sample_experience(batch_size)
         # results are separate arrays
         states, actions, rewards, next_states, dones = experiences
         next_q_values = self.model.predict(next_states, verbose=0)
@@ -118,8 +144,6 @@ class FrozenLake:
     def print_state_values(self, lake_states, predicted_values, batch_size):
         results = [-1] * batch_size
         print('lake_states: ', lake_states)
-        for state, index in enumerate(lake_states):
-            results[state] = np.argmax(predicted_values[index])
-
-        for state in results:
-            print('state: ', state, ', ', self.get_action(state))
+        for index, state in enumerate(lake_states):
+            max_q_action = np.argmax(predicted_values[index])
+            print('state: ', state, ', ', self.get_action(max_q_action))
