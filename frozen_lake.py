@@ -10,6 +10,8 @@ import random
 from collections import deque
 
 
+plt.ion()
+
 class FrozenLake:
     input_shape = [1]
     n_outputs = 4
@@ -21,7 +23,7 @@ class FrozenLake:
     replay_buffer = deque(maxlen=2000)
     batch_size = 32
     discount_factor = 0.95
-    optimizer = tf.keras.optimizers.Nadam(learning_rate=1e-2)
+    optimizer = tf.keras.optimizers.Nadam(learning_rate=1e-3)
     loss_function = tf.keras.losses.MeanSquaredError()
 
     def __init__(self):
@@ -147,3 +149,10 @@ class FrozenLake:
         for index, state in enumerate(lake_states):
             max_q_action = np.argmax(predicted_values[index])
             print('state: ', state, ', ', self.get_action(max_q_action))
+
+    def end_of_training(self):
+        # Save model
+        self.model.save("output/RF_model.h5")
+        # save graphs
+        plt.savefig('output/graph.png')
+        print('Model and graphs saved')
