@@ -90,10 +90,15 @@ class FrozenLake:
             if reward == 0:  # done because falling to the hole
                 reward = -1
             if reward == 1:  # done because of completion
-                reward = 10
+                reward = 100
 
         else:
-            reward = -0.01  # minor punishment for not going to target
+            reward = 0.01  # minor encouragement for staying in the board
+        # check if agent tres to move out of boundary
+        if state == next_state:
+            print('Agent tries to go out of the boundary')
+            reward = -0.5  # to encourage exploration I didn't put same punishment as falling to lake
+
         print("Reward: ", reward, " steps: ", self.steps)
         self.replay_buffer.append((state, action, reward, next_state, done))
         self.reward_array.append(reward)
