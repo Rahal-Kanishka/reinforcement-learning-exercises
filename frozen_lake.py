@@ -2,7 +2,6 @@ import gym
 import tensorflow as tf
 import numpy as np
 import google.protobuf
-import tensorflow as tf
 import sys
 import matplotlib.pyplot as plt
 import random
@@ -40,6 +39,19 @@ class FrozenLake:
         self.epsilon_array = []
         self.prediction_array = [-1] * 16
         self.loss_array = []
+
+    def initialize_testing(self):
+        self.model = tf.keras.models.load_model('output/RF_model.h5')
+        print("model loaded")
+        self.model.summary()
+
+    def play_trained_agent(self, env, state):
+        q_values = self.model.predict(np.array([state], dtype=np.float32), verbose=0)[0]
+        print("Playing by model: ", q_values, ', state: ', state)
+        action = np.argmax(q_values)
+        next_state, reward, done, truncated, info = env.step(action)
+        return next_state, reward, done, truncated, info
+
 
     def epsilon_greedy_policy(self, state, epsilon=0.0):
         if np.random.rand() < epsilon:
