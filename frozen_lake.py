@@ -1,4 +1,3 @@
-import gym
 import tensorflow as tf
 import numpy as np
 import google.protobuf
@@ -173,3 +172,31 @@ class FrozenLake:
         # save graphs
         plt.savefig('output/graph.png')
         print('Model and graphs saved')
+
+    def plot_q_values(self, states, q_values):
+
+        # process q vales
+
+        fig, axes = plt.subplots(4, 4, figsize=(16, 10))
+
+        for state_id in range(16):
+            # since st
+            state_array_index = -1
+            state_indexes = np.where(states == state_id)[0]
+            if state_indexes is not None and len(state_indexes) > 0:
+                state_array_index = np.where(states == state_id)[0][0]
+            else:
+                break
+            row, col = divmod(state_id, 4)
+            ax = axes[row, col]
+            ax.bar(['Left', 'Down', 'Right', 'Up'], q_values[state_array_index], color='green')
+            ax.set_title(f"State {state_id}")
+            ax.set_ylim([0, np.max(q_values)])  # Keep y-axis consistent
+
+        for ax in axes.flat[len(states):]:
+            ax.axis('off')
+
+        plt.tight_layout()
+        plt.savefig("output/q_values_grid.png", dpi=300)  # Save the entire grid as a file
+        # plt.show()
+        plt.close()
