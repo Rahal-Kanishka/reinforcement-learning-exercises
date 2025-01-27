@@ -3,12 +3,11 @@ import numpy as np
 import google.protobuf
 import sys
 import matplotlib.pyplot as plt
-import random
 
 from collections import deque
 
-
 plt.ion()
+
 
 class FrozenLake:
     input_shape = [1]
@@ -21,7 +20,7 @@ class FrozenLake:
     replay_buffer = deque(maxlen=2000)
     batch_size = 32
     discount_factor = 0.95
-    optimizer = tf.keras.optimizers.Nadam(learning_rate=1e-3)
+    optimizer = tf.keras.optimizers.Nadam(learning_rate=1e-4, clipnorm=1.0)
     loss_function = tf.keras.losses.MeanSquaredError()
 
     def __init__(self):
@@ -29,7 +28,7 @@ class FrozenLake:
         print("TensorFlow version:", tf.__version__)
         print("Protobuf version: ", google.protobuf.__version__)
         print("python version: ", sys.version)
-        self.epsilon = 0.99
+        self.epsilon = 1
         self.batch_size = 100
         self.steps = 0
         self.state_array = [0] * 16
@@ -40,7 +39,7 @@ class FrozenLake:
         self.loss_array = []
 
     def initialize_testing(self):
-        self.model = tf.keras.models.load_model('output/RF_model.h5')
+        self.model = tf.keras.models.load_model('output/RF_model.keras')
         print("model loaded")
         self.model.summary()
 
@@ -51,14 +50,13 @@ class FrozenLake:
         next_state, reward, done, truncated, info = env.step(action)
         return next_state, reward, done, truncated, info
 
-
-    def epsilon_greedy_policy(self, state, epsilon=0.0):
-        if np.random.rand() < epsilon:
+    def epsilon_greedy_policy(self, state):
+        if np.random.rand() < self.epsilon:
             # print("Playing random")
             return np.random.randint(self.n_outputs)  # random action
         else:
             q_values = self.model.predict(np.array([state], dtype=np.float32), verbose=0)[0]
-            print("Playing by model: ", q_values, ', state: ', state, ', epsilon: ', epsilon)
+            print("Playing by model: ", q_values, ', state: ', state, ', epsilon: ', self.epsilon)
             # self.prediction_array.append({np.argmax(q_values),np.argmax(q_values)})
             return np.argmax(q_values)  # find max index (action value)
 
@@ -70,7 +68,7 @@ class FrozenLake:
             np.array([batch_item[field_index] for batch_item in batch]) for field_index in range(5)
         ]  # [ state, actions, rewards, next_states, truncates, dones]
 
-    def prioritize_sample_experience(self, batch_size):
+    def prioritize_sample_experience(self):
         batch = []
         indices = []
         for i in range(16):
@@ -78,7 +76,9 @@ class FrozenLake:
             if len(filtered_data) > 2:
                 # batch.append(random.sample(filtered_data, 2))
                 tmp = np.random.randint(len(filtered_data), size=2)  # get two items random from the results
-                indices.extend([self.replay_buffer.index(filtered_data[tmp[1]]), self.replay_buffer.index(filtered_data[tmp[1]])])  # get the index
+                # tmp = np.random.choice(len(filtered_data), size=2, replace=False)
+                indices.extend([self.replay_buffer.index(filtered_data[tmp[0]]),
+                                self.replay_buffer.index(filtered_data[tmp[1]])])  # get the index
             elif len(filtered_data) == 2:
                 indices.append(self.replay_buffer.index(filtered_data[0]))
                 indices.append(self.replay_buffer.index(filtered_data[1]))
@@ -92,25 +92,31 @@ class FrozenLake:
             np.array([batch_item[field_index] for batch_item in batch]) for field_index in range(5)
         ]
 
-    def play_one_step(self, env, state, epsilon):
+    def play_one_step(self, env, state):
         self.state_array[state] += 1
         self.steps += 1
-        action = self.epsilon_greedy_policy(state, epsilon)
+        action = self.epsilon_greedy_policy(state)
         next_state, reward, done, truncated, info = env.step(action)
         if done:  # could be done because agent went to the target or fll to the hole
             if reward == 0:  # done because falling to the hole
                 reward = -1
             if reward == 1:  # done because of completion
-                reward = 100
-
+                reward = 10
         else:
-            reward = 0.01  # minor encouragement for staying in the board
+            # if next state belongs to last two rows, give increased reward
+            if next_state > 11:  # for reaching last row
+                reward = 2
+            elif next_state > 7:
+                reward = 1
+            else:
+                reward = 0.10  # minor encouragement for staying in the board
+
         # check if agent tres to move out of boundary
         if state == next_state:
             print('Agent tries to go out of the boundary')
-            reward = -0.5  # to encourage exploration I didn't put same punishment as falling to lake
+            reward = -0.50  # to encourage exploration I didn't put same punishment as falling to lake
 
-        print("Reward: ", reward, " steps: ", self.steps)
+        print("Reward: ", reward, " state: ", state)
         self.replay_buffer.append((state, action, reward, next_state, done))
         self.reward_array.append(reward)
         self.epsilon_array.append(self.epsilon)
@@ -125,7 +131,7 @@ class FrozenLake:
         return next_state, reward, done, truncated, info
 
     def training_step(self, batch_size):
-        experiences = self.prioritize_sample_experience(batch_size)
+        experiences = self.prioritize_sample_experience()
         # results are separate arrays
         states, actions, rewards, next_states, dones = experiences
         next_q_values = self.model.predict(next_states, verbose=0)
@@ -133,6 +139,7 @@ class FrozenLake:
         self.print_state_values(next_states, next_q_values, batch_size)
         max_next_q_value = next_q_values.max(axis=1)
         print("max Q: ", max_next_q_value)
+        self.plot_q_values(next_states, next_q_values)
         runs = 1.0 - dones
         target_q_values = rewards + runs * self.discount_factor * max_next_q_value
         target_q_values = target_q_values.reshape(-1, 1)
@@ -168,7 +175,7 @@ class FrozenLake:
 
     def end_of_training(self):
         # Save model
-        self.model.save("output/RF_model.h5")
+        self.model.save("output/RF_model.keras")
         # save graphs
         plt.savefig('output/graph.png')
         print('Model and graphs saved')
