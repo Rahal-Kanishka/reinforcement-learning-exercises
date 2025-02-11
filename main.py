@@ -6,34 +6,35 @@ import tensorflow as tf
 def train_model():
     global step
     # execute only if run as the entry point into the program
-    frozenLake = FrozenLake()
     env = gym.make('FrozenLake-v1', is_slippery=False, render_mode="human")
+    frozenLake = FrozenLake(env.observation_space.n, env.action_space.n)
     state_array = [0] * 16
-    for episode in range(300):
-        print('Episode: ', episode, ', epsilon: ', frozenLake.epsilon, 'state steps: ', state_array)
+    for episode in range(400):
+        print('======================== ', 'Episode: ', episode, ', epsilon: ', frozenLake.epsilon, 'state steps: ',
+              state_array, '========================')
         obs = env.reset()[0]
-        for step in range(500):
-            epsilon = max(1 - episode / 500, 0.01)
-            obs, reward, done, truncated, info = frozenLake.play_one_step(env, obs, epsilon)
+        for step in range(50):
+            frozenLake.epsilon = max(1 - episode / 600, 0.01)
+            obs, reward, done, truncated, info = frozenLake.play_one_step(env, obs)
             # print('step: ', step, ', Epsilon: ', epsilon, ', Reward: ', reward, ', obs: ', obs)
             state_array[obs] += 1
             env.render()
             if done or truncated:
                 break
 
-        if episode > 50:
+        if episode > 20:
             frozenLake.training_step(batch_size=32)
     frozenLake.end_of_training()
 
 
 def test_model():
-    frozen_lake_test = FrozenLake()
     env = gym.make('FrozenLake-v1', is_slippery=False, render_mode="human")
+    frozen_lake_test = FrozenLake(env.observation_space.n, env.action_space.n)
     total_steps = 0
     frozen_lake_test.initialize_testing()
     for episode in range(50):
         obs = env.reset()[0]
-        for test_step in range(500):
+        for test_step in range(10):
             obs, reward, done, truncated, info = frozen_lake_test.play_trained_agent(env, obs)
             env.render()
             total_steps += 1
@@ -44,6 +45,7 @@ def test_model():
 
 if __name__ == '__main__':
     test_model()
+    # train_model()
 
 # if __name__ == '__main__':
 #     print("TensorFlow version:", tf.__version__)

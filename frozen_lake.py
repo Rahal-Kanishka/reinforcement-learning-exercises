@@ -17,6 +17,7 @@ def one_hot_encode_input(state, env_state_size):
 
 class FrozenLake:
     replay_buffer = deque(maxlen=2000)
+    replay_buffer_dic = {i: deque(maxlen=2000) for i in range(0, 17)}  # separate queue for each state
     batch_size = 32
     discount_factor = 0.95
     optimizer = tf.keras.optimizers.Nadam(learning_rate=1e-4, clipnorm=1.0)
@@ -36,8 +37,8 @@ class FrozenLake:
         self.output_shape = n_actions
         self.model = tf.keras.Sequential([
             tf.keras.layers.Input(shape=(env_state_size,)),
-            tf.keras.layers.Dense(units=32, activation="elu"),
-            tf.keras.layers.Dense(units=32, activation="elu"),
+            tf.keras.layers.Dense(units=64, activation="elu"),
+            tf.keras.layers.Dense(units=64, activation="elu"),
             tf.keras.layers.Dense(self.output_shape)
         ])
         print("Initializing frozen lake")
@@ -55,11 +56,11 @@ class FrozenLake:
         # encode input
         encoded_input = np.array([one_hot_encode_input(state, self.input_shape)])  #  bring to (none, 16) shape
         # print('encoded input: ', encoded_input)
-        next_q_values = self.model.predict(encoded_input, verbose=0)
+        next_q_values = self.model.predict(encoded_input, verbose=0)[0]
         return next_q_values
 
     def play_trained_agent(self, env, state):
-        q_values = self.model.predict(self.predict_using_model(state), verbose=0)[0]
+        q_values = self.predict_using_model(state)
         print("Playing by model: ", q_values, ', state: ', state)
         action = np.argmax(q_values)
         next_state, reward, done, truncated, info = env.step(action)
@@ -107,6 +108,25 @@ class FrozenLake:
             np.array([batch_item[field_index] for batch_item in batch]) for field_index in range(5)
         ]
 
+    def equal_sampling_experience(self):
+        batch = []
+        indices = []
+        for i in range(16):
+            replay_buffer_at_index = self.replay_buffer_dic[0]
+            tmp = np.random.randint(len(replay_buffer_at_index), size=2)
+            # replay_buffer_dic = {{i}: deque(maxlen=2000) for i in range(0, 17)}  # separate queue for each state
+            if len(tmp) >= 2:
+                indices.append(self.replay_buffer.index(replay_buffer_at_index[tmp[0]]))
+                indices.append(self.replay_buffer.index(replay_buffer_at_index[tmp[1]]))
+            elif len(tmp) == 1:
+                indices.append(self.replay_buffer.index(replay_buffer_at_index[tmp[0]]))
+
+        batch = [self.replay_buffer[index] for index in indices]
+
+        return [
+            np.array([batch_item[field_index] for batch_item in batch]) for field_index in range(5)
+        ]
+
     def play_one_step(self, env, state):
         self.state_array[state] += 1
         self.steps += 1
@@ -123,6 +143,8 @@ class FrozenLake:
                 reward = 2
             elif next_state > 7:  # for reaching one before last row
                 reward = 1
+            elif next_state < 4:  # for staying in 1st row
+                reward = -0.10
             else:
                 reward = 0.10  # minor encouragement for staying in the board
 
@@ -133,6 +155,7 @@ class FrozenLake:
 
         print("Reward: ", reward, " state: ", state)
         self.replay_buffer.append((state, action, reward, next_state, done))
+        self.replay_buffer_dic[0].append((state, action, reward, next_state, done))
         self.reward_array.append(reward)
         self.epsilon_array.append(self.epsilon)
         # plot reward
@@ -148,7 +171,8 @@ class FrozenLake:
     def training_step(self, batch_size):
         """ Calculating q values for the next states (next_q_value) and calculate target_q_values using bellman equation
         and  then calculate the loss between them and train the model """
-        experiences = self.prioritize_sample_experience()
+        # experiences = self.prioritize_sample_experience()
+        experiences = self.equal_sampling_experience()
         # results are separate arrays
         states, actions, rewards, next_states, dones = experiences
         # print('actions: ', actions)
@@ -231,7 +255,7 @@ class FrozenLake:
                 state_array_index = np.where(states == state_id)[0][0]
             else:
                 print('No states found for : ', state_id)
-                break
+                continue
             row, col = divmod(state_id, 4)
             ax = axes[row, col]
             # print('q_values: ', q_values)
